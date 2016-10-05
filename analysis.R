@@ -2,7 +2,7 @@
 # Author: Zach Bricker && TRISTEN RUMBAUGH!! :)
 # Organization: WildFig Data
 
-# Load Library's
+# Load Libraries
 libs <- c('tidyr', 'broom', 'dplyr', 'ggplot2', 'ggfortify', 'tidytext', 'readr', 'stringr',
           'jsonlite', 'Rfacebook', 'twitteR', 'lubridate', 'scales', 'wordcloud', 'SnowballC',
           'tm', 'syuzhet', 'tidyr', 'xts')
@@ -60,43 +60,43 @@ timeseries_engagement <- function(client) {
 }
 
 
-# Create Vertical summary_stats
+# Create Vertical summary_stats for Labatt
 summary_stats <- gather(summary_stats, Engagement, Number, Comments:Total.Posts)
-all_engagement <- all_companies %>%
+labatt <- labatt %>%
   select(from_name, type, likes_count, comments_count, shares_count) %>%
   gather(count_name, value, likes_count:shares_count)
 
-# Plots for Engagement by Type
-all_engagement$type <- as.character(all_engagement$type)
-all_engagement$type[all_engagement$type == "photo"] <- "Photo"
+# Plots for Engagement by Type for Labatt
+labatt$type <- as.character(labatt$type)
+labatt$type[labatt$type == "photo"] <- "Photo"
 
-all_engagement$type <- as.character(all_engagement$type)
-all_engagement$type[all_engagement$type == "video"] <- "Video"
+labatt$type <- as.character(labatt$type)
+labatt$type[labatt$type == "video"] <- "Video"
 
-all_engagement$type <- as.character(all_engagement$type)
-all_engagement$type[all_engagement$type == "link"] <- "Link"
+labatt$type <- as.character(labatt$type)
+labatt$type[labatt$type == "link"] <- "Link"
 
-all_engagement$type <- as.character(all_engagement$type)
-all_engagement$type[all_engagement$type == "status"] <- "Status"
+labatt$type <- as.character(labatt$type)
+labatt$type[labatt$type == "status"] <- "Status"
 
-all_engagement$type <- as.character(all_engagement$type)
-all_engagement$type[all_engagement$type == "music"] <- "Music"
+labatt$type <- as.character(labatt$type)
+labatt$type[labatt$type == "music"] <- "Music"
 
-all_engagement$type <- as.character(all_engagement$type)
-all_engagement$type[all_engagement$type == "event"] <- "Event"
+labatt$type <- as.character(labatt$type)
+labatt$type[labatt$type == "event"] <- "Event"
 
-all_engagement$count_name <- as.character(all_engagement$count_name)
-all_engagement$count_name[all_engagement$count_name == "likes_count"] <- "Likes"
+labatt$count_name <- as.character(labatt$count_name)
+labatt$count_name[labatt$count_name == "likes_count"] <- "Likes"
 
-all_engagement$count_name <- as.character(all_engagement$count_name)
-all_engagement$count_name[all_engagement$count_name == "shares_count"] <- "Shares"
+labatt$count_name <- as.character(labatt$count_name)
+labatt$count_name[labatt$count_name == "shares_count"] <- "Shares"
 
-all_engagement$count_name <- as.character(all_engagement$count_name)
-all_engagement$count_name[all_engagement$count_name == "comments_count"] <- "Comments"
+labatt$count_name <- as.character(labatt$count_name)
+labatt$count_name[labatt$count_name == "comments_count"] <- "Comments"
 
 
-### Matrix Content Engagement ###
-p <- all_engagement %>%
+### Matrix Content Engagement for Labatt###
+p <- labatt %>%
   filter(type != "Music") %>%
   ggplot(., aes(x = type, y = count_name)) + 
   stat_sum(aes(group = value, color = type)) + scale_size(range = c(5, 15)) +
@@ -105,7 +105,7 @@ p <- all_engagement %>%
 
 plot(p)
 
-p <- all_engagement %>%
+p <- labatt %>%
   filter(type != "Music") %>%
   filter(from_name == "Labatt USA") %>%
   ggplot(., aes(x = type, y = count_name)) + 
