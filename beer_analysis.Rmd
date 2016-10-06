@@ -1,26 +1,30 @@
-# Quench Labatt Social Analysis Data Gathering
-# Author: Zach Bricker && TRISTEN RUMBAUGH!! :)
-# Organization: WildFig Data
+---
+title: "beer_analysis"
+output: html_document
+---
 
-# Load Libraries
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
 libs <- c('tidyr', 'broom', 'dplyr', 'ggplot2', 'ggfortify', 'tidytext', 'readr', 'stringr',
           'jsonlite', 'Rfacebook', 'twitteR', 'lubridate', 'scales', 'wordcloud', 'SnowballC',
           'tm', 'syuzhet', 'tidyr', 'xts')
 lapply(libs, library, character.only = TRUE)
 remove(libs)
-
-# Load Data Files
 filenames <- list.files(path = 'processed_data/', pattern = '*.RData', full.names = TRUE)
 lapply(filenames, load, .GlobalEnv)
 remove(filenames)
-
-# Create name objects for looping
 df_names <- c('labatt', 'molson', 'ultra', 'bud')
 client_names <- c('Labatt_USA', 'Molson_Canadian', 'Michelob_ULTRA', 'budlight')
 client_names_proper <- c('Labatt USA', 'Molson Canadian', 'Michelob ULTRA', 'Bud Light')
 client_ids <- c(134391846723545, 424106561004308, 57921319808, 54876245094)
+# rmarkdown::render('beer_analysis.Rmd', output_file = 'documents/beer_analysis.html')
+```
 
-# Facebook Timestamp Creation
+
+## Data Shaping ##
+Taking in raw data and adding a parseable timestamp while filtering on the date and client_ids.
+
+```{r data_shaping, include = FALSE}
 labatt$timestamp <- ymd_hms(labatt$created_time)
 labatt$timestamp <- with_tz(labatt$timestamp, "America/New_York")
 
@@ -64,9 +68,12 @@ Likes <- c(sum(labatt$likes_count), sum(molson$likes_count), sum(ultra$likes_cou
 Shares <- c(sum(labatt$shares_count), sum(molson$shares_count), sum(ultra$shares_count), sum(bud$shares_count))
 Total.Posts <- c(nrow(labatt), nrow(molson), nrow(ultra), nrow(bud))
 summary_stats <- data.frame(Company, Comments, Likes, Shares, Total.Posts)
+```
 
+## Function Definition ##
+Define functions to create posts per day of week graphs, and timeseries of engagement line graphs.
 
-# Plot Functions
+```{r functions, include = FALSE}
 day_of_week <- function(df, client) {
   r <- get(df) %>%
     filter(from_id %in% client_ids)
@@ -83,8 +90,12 @@ timeseries_engagement <- function(client) {
   ggplot(data = r, aes(x = timestamp, y = total_engagement)) + 
     geom_line(size = 1)
 }
+```
 
+## Additional Data Shaping for Engagement ##
+Shape data into vertical data formats.
 
+```{r addtl_data_shaping, include = FALSE}
 # Create Vertical summary_stats for Labatt
 
 summary_stats <- gather(summary_stats, Engagement, Number, Comments:Total.Posts)
@@ -152,7 +163,13 @@ all_engagement$count_name[all_engagement$count_name == "shares_count"] <- "Share
 all_engagement$count_name <- as.character(all_engagement$count_name)
 all_engagement$count_name[all_engagement$count_name == "comments_count"] <- "Comments"
 
-### Matrix Content Engagement for Labatt###
+```
+
+
+## Matrices plots of Engagement ## 
+First plot is aggregated engagement by content type. Second plot, it engagement by type for client(Labatt).
+
+```{r matrix_engagement, include = TRUE, echo = FALSE}
 p <- all_engagement %>%
   filter(type != "Music") %>%
   ggplot(., aes(x = type, y = count_name)) + 
@@ -171,8 +188,11 @@ p <- labatt_engagement %>%
   xlab("Post Content Type") + ylab("Engagement Type") + 
   coord_flip() + theme(text = element_text(size=20))
 plot(p)
+```
 
-# Summary Plots
+## Summary Plots ##
+Horizontal stacked bar chart for total engagement comparison of all companies
+```{r summary_plots, include = TRUE}
 p <- summary_stats %>%
   filter(Engagement != "Total.Posts") %>%
   ggplot(., aes(x = Company, y = Number, fill = Engagement)) +
@@ -181,50 +201,49 @@ p <- summary_stats %>%
   coord_flip()
 
 plot(p)
+```
 
-# Create Plots for Day Of Week
+## Day of Week ##
+Total posts per day of the week.
+```{r day_of_week, include = TRUE}
 for(i in seq_along(df_names)) {
   p <- day_of_week(df_names[i], client_names[i])
   plot(p)
-
 }
 
-# Create Plots for Time Series
+p <- ggplot(data = all_companies_ts, aes(x = wday(timestamp, label = TRUE))) +
+  geom_bar(aes(fill = ..count..)) +
+  theme(legend.position = "none") +
+  xlab("Day of the Week") + ylab("Number of Posts") +
+  scale_fill_gradient(low = "midnightblue", high = "aquamarine4") + facet_wrap(~from_name, ncol = 4)
+plot(p)
+
+dowDat <- select(all_companies_ts, total_engagement,from_name, timestamp)
+dowDat$dow <- wday(dowDat$timestamp, label=TRUE)
+dowDat <- aggregate(total_engagement~dow+from_name, data=dowDat, FUN=mean)
+
+p <- ggplot(dowDat, aes(x = dow, y = total_engagement)) +
+  geom_bar(stat="identity", aes(fill = total_engagement)) + 
+  facet_grid(~from_name) + 
+  ggtitle('Engagements Per Day of Week') +
+  theme(legend.position = "none") +
+  xlab("Day of the Week") + ylab("Number of Engagements") +
+  scale_fill_gradient(low = "midnightblue", high = "aquamarine4")
+plot(p)
+```
+
+## Timeseries Engagement ##
+Plots for the timeseries engagement line.
+```{r line_timeseries_engagement, include = TRUE}
 for(i in seq_along(df_names)) {
   p <- timeseries_engagement(client_names_proper[i])
   plot(p)
 }
+```
 
-
-
-########### Kevins Plots ###########
-# Plots by Month
-load('processed_data/labatt_ts.RData')
-labatt$dateKP <- date(labatt$timestamp)
-
-pphTS <- labatt %>% 
-  select(from_name, type, likes_count:shares_count, dateKP) %>%
-  filter(from_name == "Labatt USA") %>%
-  mutate(totEng = likes_count + comments_count + shares_count)
-
-pphTS <- pphTS %>%
-  mutate(month = as.Date(cut(pphTS$dateKP, breaks = "month")))
-
-pphTS2 <- aggregate(pphTS$totEng~pphTS$month, FUN=sum, na.rm=TRUE)
-
-# graph by month:
-ggplot(data = pphTS, aes(month, totEng)) +
-  stat_summary(fun.y = sum, geom = "line") #this does the summation not in the data
-
-summary(pphTS2)
-pph_ts <- ts(pphTS2, start=c(2011, 7), end=c(2016, 8), frequency=12) 
-
-plot(pph_ts)
-
-
-
-########### Kevins Plots ###########
-
+## Initial Visualization of engagement over time on a line ##
+Test viz, showed spike in enegagment for Bud Light in august 2016.
+```{r test_viz, include = TRUE}
 all_companies_ts <- all_companies_ts %>%
   filter(from_id %in% client_ids) %>%
   mutate(month = as.Date(cut(all_companies_ts$timestamp, breaks = "month")))
@@ -233,17 +252,15 @@ all_companies_ts <- all_companies_ts %>%
 ggplot(all_companies_ts, aes(x = month, y = total_engagement)) +
   geom_line(aes(group = from_name, color = factor(from_name)))
 
-# Wordclouds
+```
 
+
+## Labatt Wordclouds ##
+Removed filter because labatt does not have significant inflection point whereas previous analysis
+```{r labatt_wordclouds, include = TRUE}
 labatt$timestamp <- date(labatt$timestamp)
-# labatt Pre
-labatt_pre <- labatt %>%
-  filter(labatt$timestamp<as.Date("2015-05-01"))
 
-labatt_post <- labatt %>%
-  filter(labatt$timestamp>as.Date("2015-05-02"))
-
-labatt_clean_pre <- str_replace_all(labatt_pre$message, "@\\w+", "")
+labatt_clean_pre <- str_replace_all(labatt$message, "@\\w+", "")
 labatt_clean_pre <- gsub("&amp", "", labatt_clean_pre)
 labatt_clean_pre <- gsub("(RT|via)((?:\\b\\W*@\\w+)+)", "", labatt_clean_pre)
 labatt_clean_pre <- gsub("@\\w+", "", labatt_clean_pre)
@@ -266,71 +283,23 @@ set.seed(123)
 
 wordcloud(words = labatt_corpus_pre, scale=c(5,0.1), max.words=25, random.order=FALSE, 
           rot.per=0.35, use.r.layout=FALSE, colors=pal)
-tdm <- TermDocumentMatrix(labatt_corpus_pre)
-tdm
+```
 
-# molson Post
-
-labatt_clean_post <- str_replace_all(labatt_post$message, "@\\w+", "")
-labatt_clean_post <- gsub("&amp", "", labatt_clean_post)
-labatt_clean_post <- gsub("(RT|via)((?:\\b\\W*@\\w+)+)", "", labatt_clean_post)
-labatt_clean_post <- gsub("@\\w+", "", labatt_clean_post)
-labatt_clean_post <- gsub("[[:punct:]]", "", labatt_clean_post)
-labatt_clean_post <- gsub("[[:digit:]]", "", labatt_clean_post)
-labatt_clean_post <- gsub("http\\w+", "", labatt_clean_post)
-labatt_clean_post <- gsub("[ \t]{2,}", "", labatt_clean_post)
-labatt_clean_post <- gsub("^\\s+|\\s+$", "", labatt_clean_post)
-
-labatt_corpus_post <- Corpus(VectorSource(labatt_clean_post))
-labatt_corpus_post <- tm_map(labatt_corpus_post, removePunctuation)
-labatt_corpus_post <- tm_map(labatt_corpus_post, content_transformer(tolower))
-labatt_corpus_post <- tm_map(labatt_corpus_post, removeWords, stopwords("english"))
-labatt_corpus_post <- tm_map(labatt_corpus_post, removeWords, c("amp", "2yo", "3yo", "4yo"))
-labatt_corpus_post <- tm_map(labatt_corpus_post, stripWhitespace)
-
-pal <- brewer.pal(9,"YlGnBu")
-pal <- pal[-(1:4)]
-set.seed(123)
-
-wordcloud(words = labatt_corpus_post, scale=c(5,0.1), max.words=25, random.order=FALSE, 
-          rot.per=0.35, use.r.layout=FALSE, colors=pal)
-tdm <- TermDocumentMatrix(labatt_corpus_post)
-tdm
-
-### Day of Week All ###
-zach_filter <- all_companies_ts %>%
-  filter(from_id %in% client_ids)
-ggplot(data = zach_filter, aes(x = wday(timestamp, label = TRUE))) +
-  geom_bar(aes(fill = ..count..)) +
-  theme(legend.position = "none") +
-  xlab("Day of the Week") + ylab("Number of Posts") +
-  scale_fill_gradient(low = "midnightblue", high = "aquamarine4") + facet_wrap(~from_name, ncol = 4)
-
-
-dowDat <- select(all_companies_ts, total_engagement,from_name, timestamp)
-dowDat$dow <- wday(dowDat$timestamp, label=TRUE)
-head(dowDat)
-dowDat <- aggregate(total_engagement~dow+from_name, data=dowDat, FUN=mean)
-
-ggplot(dowDat, aes(x = dow, y = total_engagement)) +
-  geom_bar(stat="identity", aes(fill = total_engagement)) + 
-  facet_grid(~from_name) + 
-  theme(legend.position = "none") +
-  xlab("Day of the Week") + ylab("Number of Engagements") +
-  scale_fill_gradient(low = "midnightblue", high = "aquamarine4")
-### Day of Week All ###
-
-### Points for Posts
-ggplot(all_companies_ts, aes(x = month, y = total_engagement)) +
+## Point Graphs for Posts ##
+Displays engagement per post to find outliers.
+```{r point_engagement, include = TRUE}
+p <- ggplot(all_companies_ts, aes(x = month, y = total_engagement)) +
   geom_point(aes(color = from_name)) +
   xlab("Year") + ylab("Total Engagement") + 
   theme(legend.title=element_blank(), 
         legend.text=element_text(size=12), 
         legend.position=c(0.18, 0.77), 
         legend.background=element_rect(fill=alpha('gray', 0)))
-### Points for Posts
+plot(p)
+```
 
-### Total Engagement Line ###
+## Total Engagement Line ##
+```{r total_engagement_line, include = TRUE}
 q <- aggregate(all_companies_ts$total_engagement~all_companies_ts$month+
                  all_companies_ts$from_name,
                FUN=sum)
@@ -342,8 +311,10 @@ ggplot(q, aes(x = q$`all_companies_ts$month`, y = q$`all_companies_ts$total_enga
         legend.text=element_text(size=12), 
         legend.position=c(0.18, 0.77), 
         legend.background=element_rect(fill=alpha('gray', 0)))
-### Total Engagement Line ###
+```
 
+## Engagement by Company ##
+```{r engagement_by_company, include = TRUE}
 ### molson Content Over Time ###
 t <- all_companies_ts %>%
   filter(., from_name == "Molson Canadian")
@@ -352,6 +323,7 @@ t <- data.frame(table(t$month, t$type))
 t$Var1 <- date(t$Var1)
 ggplot(t, aes(x = Var1, y = Freq, group = Var2)) +
   geom_line(aes(color=Var2)) +
+  ggtitle('Molson Engagement') +
   xlab("Year") + ylab("Post Frequency") +
   theme(legend.title=element_blank(), 
         legend.text=element_text(size=12), 
@@ -370,6 +342,7 @@ t <- data.frame(table(t$month, t$type))
 t$Var1 <- date(t$Var1)
 ggplot(t, aes(x = Var1, y = Freq, group = Var2)) +
   geom_line(aes(color=Var2)) +
+  ggtitle('Labatt Engagement') +
   xlab("Year") + ylab("Post Frequency") +
   theme(legend.title=element_blank(), 
         legend.text=element_text(size=12), 
@@ -386,6 +359,7 @@ t <- data.frame(table(t$month, t$type))
 t$Var1 <- date(t$Var1)
 ggplot(t, aes(x = Var1, y = Freq, group = Var2)) +
   geom_line(aes(color=Var2)) +
+  ggtitle('Michelob ULTRA Engagement') +
   xlab("Year") + ylab("Post Frequency") +
   theme(legend.title=element_blank(), 
         legend.text=element_text(size=12), 
@@ -402,8 +376,10 @@ t <- data.frame(table(t$month, t$type))
 t$Var1 <- date(t$Var1)
 ggplot(t, aes(x = Var1, y = Freq, group = Var2)) +
   geom_line(aes(color=Var2)) +
+  ggtitle('Bud Light Engagement') +
   xlab("Year") + ylab("Post Frequency") +
   theme(legend.title=element_blank(), 
         legend.text=element_text(size=12), 
         legend.position=c(0.18, 0.77), 
         legend.background=element_rect(fill=alpha('gray', 0)))
+```
