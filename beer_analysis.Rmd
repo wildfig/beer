@@ -383,3 +383,12 @@ ggplot(t, aes(x = Var1, y = Freq, group = Var2)) +
         legend.position=c(0.18, 0.77), 
         legend.background=element_rect(fill=alpha('gray', 0)))
 ```
+
+## Kevins Questions ##
+```{r kevins_questions, include = TRUE}
+load('processed_data/bud_fb.RData')
+bud$total_engagement <- rowSums(bud[,9:11])
+z <- bud %>%
+  arrange(desc(total_engagement))
+head(z)
+```

@@ -41,6 +41,7 @@ all_companies_ts <- all_companies_ts %>%
   filter(from_id %in% client_ids) %>%
   filter(year(timestamp) %in% c('2015', '2016'))
 
+
 labatt <- labatt %>%
   filter(from_id %in% client_ids) %>%
   filter(year(timestamp) %in% c('2015', '2016'))
@@ -55,7 +56,8 @@ ultra <- ultra %>%
 
 bud <- bud %>%
   filter(from_id %in% client_ids) %>%
-  filter(year(timestamp) %in% c('2015', '2016'))
+  filter(year(timestamp) %in% c('2011', '2016'))
+
 
 # Build Summary Stats DataFrame
 Company <- c('Labatt USA', 'Molson Canadian', 'Michelob ULTRA', 'Bud Light')
@@ -360,7 +362,6 @@ ggplot(t, aes(x = Var1, y = Freq, group = Var2)) +
 
 
 #TRISTEN'S GRAPHS!!
-#Labatt Content Over Time
 
 ### Labatt Content Over Time ###
 t <- all_companies_ts %>%
@@ -376,7 +377,6 @@ ggplot(t, aes(x = Var1, y = Freq, group = Var2)) +
         legend.position=c(0.18, 0.77), 
         legend.background=element_rect(fill=alpha('gray', 0)))
 
-#Labatt Content Over Time
 
 #MichelobULTRA Content Over Time ###
 t <- all_companies_ts %>%
@@ -392,7 +392,6 @@ ggplot(t, aes(x = Var1, y = Freq, group = Var2)) +
         legend.position=c(0.18, 0.77), 
         legend.background=element_rect(fill=alpha('gray', 0)))
 
-#Labatt Content Over Time
 
 #Bud Light Content Over Time ###
 t <- all_companies_ts %>%
@@ -407,3 +406,10 @@ ggplot(t, aes(x = Var1, y = Freq, group = Var2)) +
         legend.text=element_text(size=12), 
         legend.position=c(0.18, 0.77), 
         legend.background=element_rect(fill=alpha('gray', 0)))
+
+
+### Bud Data Manipulation
+bud_total_engagement <- sum(c(bud$likes_count, bud$comments_count, bud$shares_count))
+
+
+   
