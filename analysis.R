@@ -38,7 +38,33 @@ all_companies_ts <- subset(all_companies_ts, select = -c(message, created_time, 
 all_companies_ts$total_engagement <- rowSums(all_companies_ts[5:7])
 
 all_companies_ts <- all_companies_ts %>%
-  filter(from_id %in% client_ids)
+  filter(from_id %in% client_ids) %>%
+  filter(year(timestamp) %in% c('2015', '2016'))
+
+labatt <- labatt %>%
+  filter(from_id %in% client_ids) %>%
+  filter(year(timestamp) %in% c('2015', '2016'))
+
+molson <- molson %>%
+  filter(from_id %in% client_ids) %>%
+  filter(year(timestamp) %in% c('2015', '2016'))
+
+ultra <- ultra %>%
+  filter(from_id %in% client_ids) %>%
+  filter(year(timestamp) %in% c('2015', '2016'))
+
+bud <- bud %>%
+  filter(from_id %in% client_ids) %>%
+  filter(year(timestamp) %in% c('2015', '2016'))
+
+# Build Summary Stats DataFrame
+Company <- c('Labatt USA', 'Molson Canadian', 'Michelob ULTRA', 'Bud Light')
+Comments <- c(sum(labatt$comments_count), sum(molson$comments_count), sum(ultra$comments_count), sum(bud$comments_count))
+Likes <- c(sum(labatt$likes_count), sum(molson$likes_count), sum(ultra$likes_count), sum(bud$likes_count))
+Shares <- c(sum(labatt$shares_count), sum(molson$shares_count), sum(ultra$shares_count), sum(bud$shares_count))
+Total.Posts <- c(nrow(labatt), nrow(molson), nrow(ultra), nrow(bud))
+summary_stats <- data.frame(Company, Comments, Likes, Shares, Total.Posts)
+
 
 # Plot Functions
 day_of_week <- function(df, client) {
@@ -61,51 +87,84 @@ timeseries_engagement <- function(client) {
 
 
 # Create Vertical summary_stats for Labatt
+
 summary_stats <- gather(summary_stats, Engagement, Number, Comments:Total.Posts)
-labatt <- labatt %>%
+labatt_engagement <- labatt %>%
+  select(from_name, type, likes_count, comments_count, shares_count) %>%
+  gather(count_name, value, likes_count:shares_count)
+
+all_engagement <- all_companies_ts %>%
   select(from_name, type, likes_count, comments_count, shares_count) %>%
   gather(count_name, value, likes_count:shares_count)
 
 # Plots for Engagement by Type for Labatt
-labatt$type <- as.character(labatt$type)
-labatt$type[labatt$type == "photo"] <- "Photo"
+labatt_engagement$type <- as.character(labatt_engagement$type)
+labatt_engagement$type[labatt_engagement$type == "photo"] <- "Photo"
 
-labatt$type <- as.character(labatt$type)
-labatt$type[labatt$type == "video"] <- "Video"
+labatt_engagement$type <- as.character(labatt_engagement$type)
+labatt_engagement$type[labatt_engagement$type == "video"] <- "Video"
 
-labatt$type <- as.character(labatt$type)
-labatt$type[labatt$type == "link"] <- "Link"
+labatt_engagement$type <- as.character(labatt_engagement$type)
+labatt_engagement$type[labatt_engagement$type == "link"] <- "Link"
 
-labatt$type <- as.character(labatt$type)
-labatt$type[labatt$type == "status"] <- "Status"
+labatt_engagement$type <- as.character(labatt_engagement$type)
+labatt_engagement$type[labatt_engagement$type == "status"] <- "Status"
 
-labatt$type <- as.character(labatt$type)
-labatt$type[labatt$type == "music"] <- "Music"
+labatt_engagement$type <- as.character(labatt_engagement$type)
+labatt_engagement$type[labatt_engagement$type == "music"] <- "Music"
 
-labatt$type <- as.character(labatt$type)
-labatt$type[labatt$type == "event"] <- "Event"
+labatt_engagement$type <- as.character(labatt_engagement$type)
+labatt_engagement$type[labatt_engagement$type == "event"] <- "Event"
 
-labatt$count_name <- as.character(labatt$count_name)
-labatt$count_name[labatt$count_name == "likes_count"] <- "Likes"
+labatt_engagement$count_name <- as.character(labatt_engagement$count_name)
+labatt_engagement$count_name[labatt_engagement$count_name == "likes_count"] <- "Likes"
 
-labatt$count_name <- as.character(labatt$count_name)
-labatt$count_name[labatt$count_name == "shares_count"] <- "Shares"
+labatt_engagement$count_name <- as.character(labatt_engagement$count_name)
+labatt_engagement$count_name[labatt_engagement$count_name == "shares_count"] <- "Shares"
 
-labatt$count_name <- as.character(labatt$count_name)
-labatt$count_name[labatt$count_name == "comments_count"] <- "Comments"
+labatt_engagement$count_name <- as.character(labatt_engagement$count_name)
+labatt_engagement$count_name[labatt_engagement$count_name == "comments_count"] <- "Comments"
 
+## All Engagement ###
+all_engagement$type <- as.character(all_engagement$type)
+all_engagement$type[all_engagement$type == "photo"] <- "Photo"
+
+all_engagement$type <- as.character(all_engagement$type)
+all_engagement$type[all_engagement$type == "video"] <- "Video"
+
+all_engagement$type <- as.character(all_engagement$type)
+all_engagement$type[all_engagement$type == "link"] <- "Link"
+
+all_engagement$type <- as.character(all_engagement$type)
+all_engagement$type[all_engagement$type == "status"] <- "Status"
+
+all_engagement$type <- as.character(all_engagement$type)
+all_engagement$type[all_engagement$type == "music"] <- "Music"
+
+all_engagement$type <- as.character(all_engagement$type)
+all_engagement$type[all_engagement$type == "event"] <- "Event"
+
+all_engagement$count_name <- as.character(all_engagement$count_name)
+all_engagement$count_name[all_engagement$count_name == "likes_count"] <- "Likes"
+
+all_engagement$count_name <- as.character(all_engagement$count_name)
+all_engagement$count_name[all_engagement$count_name == "shares_count"] <- "Shares"
+
+all_engagement$count_name <- as.character(all_engagement$count_name)
+all_engagement$count_name[all_engagement$count_name == "comments_count"] <- "Comments"
 
 ### Matrix Content Engagement for Labatt###
-p <- labatt %>%
+p <- all_engagement %>%
   filter(type != "Music") %>%
   ggplot(., aes(x = type, y = count_name)) + 
+  facet_grid(~from_name) +
   stat_sum(aes(group = value, color = type)) + scale_size(range = c(5, 15)) +
   xlab("Post Content Type") + ylab("Engagement Type") +
   coord_flip() + theme(text = element_text(size=20))
 
 plot(p)
 
-p <- labatt %>%
+p <- labatt_engagement %>%
   filter(type != "Music") %>%
   filter(from_name == "Labatt USA") %>%
   ggplot(., aes(x = type, y = count_name)) + 
@@ -113,177 +172,6 @@ p <- labatt %>%
   xlab("Post Content Type") + ylab("Engagement Type") + 
   coord_flip() + theme(text = element_text(size=20))
 plot(p)
-
-
-# Create Vertical summary_stats for molson
-summary_stats <- gather(summary_stats, Engagement, Number, Comments:Total.Posts)
-molson <- molson %>%
-  select(from_name, type, likes_count, comments_count, shares_count) %>%
-  gather(count_name, value, likes_count:shares_count)
-
-# Plots for Engagement by Type for molson
-molson$type <- as.character(molson$type)
-molson$type[molson$type == "photo"] <- "Photo"
-
-molson$type <- as.character(molson$type)
-molson$type[molson$type == "video"] <- "Video"
-
-molson$type <- as.character(molson$type)
-molson$type[molson$type == "link"] <- "Link"
-
-molson$type <- as.character(molson$type)
-molson$type[molson$type == "status"] <- "Status"
-
-molson$type <- as.character(molson$type)
-molson$type[molson$type == "music"] <- "Music"
-
-molson$type <- as.character(molson$type)
-molson$type[molson$type == "event"] <- "Event"
-
-molson$count_name <- as.character(molson$count_name)
-molson$count_name[molson$count_name == "likes_count"] <- "Likes"
-
-molson$count_name <- as.character(molson$count_name)
-molson$count_name[molson$count_name == "shares_count"] <- "Shares"
-
-molson$count_name <- as.character(molson$count_name)
-molson$count_name[molson$count_name == "comments_count"] <- "Comments"
-
-
-### Matrix Content Engagement for molson###
-p <- molson %>%
-  filter(type != "Music") %>%
-  ggplot(., aes(x = type, y = count_name)) + 
-  stat_sum(aes(group = value, color = type)) + scale_size(range = c(5, 15)) +
-  xlab("Post Content Type") + ylab("Engagement Type") +
-  coord_flip() + theme(text = element_text(size=20))
-
-plot(p)
-
-p <- molson %>%
-  filter(type != "Music") %>%
-  filter(from_name == "Molson Canadian") %>%
-  ggplot(., aes(x = type, y = count_name)) + 
-  stat_sum(aes(group = value, color = type)) + scale_size(range = c(5, 15)) +
-  xlab("Post Content Type") + ylab("Engagement Type") + 
-  coord_flip() + theme(text = element_text(size=20))
-
-plot(p)
-
-##Michelob Ultra
-summary_stats <- gather(summary_stats, Engagement, Number, Comments:Total.Posts)
-ultra <- ultra %>%
-  select(from_name, type, likes_count, comments_count, shares_count) %>%
-  gather(count_name, value, likes_count:shares_count)
-
-# Plots for Engagement by Type for ultra
-ultra$type <- as.character(ultra$type)
-ultra$type[ultra$type == "photo"] <- "Photo"
-
-ultra$type <- as.character(ultra$type)
-ultra$type[ultra$type == "video"] <- "Video"
-
-ultra$type <- as.character(ultra$type)
-ultra$type[ultra$type == "link"] <- "Link"
-
-ultra$type <- as.character(ultra$type)
-ultra$type[ultra$type == "status"] <- "Status"
-
-ultra$type <- as.character(ultra$type)
-ultra$type[ultra$type == "music"] <- "Music"
-
-ultra$type <- as.character(ultra$type)
-ultra$type[ultra$type == "event"] <- "Event"
-
-ultra$count_name <- as.character(ultra$count_name)
-ultra$count_name[ultra$count_name == "likes_count"] <- "Likes"
-
-ultra$count_name <- as.character(ultra$count_name)
-ultra$count_name[ultra$count_name == "shares_count"] <- "Shares"
-
-ultra$count_name <- as.character(ultra$count_name)
-ultra$count_name[ultra$count_name == "comments_count"] <- "Comments"
-
-
-### Matrix Content Engagement for ultra###
-p <- ultra %>%
-  filter(type != "Music") %>%
-  ggplot(., aes(x = type, y = count_name)) + 
-  stat_sum(aes(group = value, color = type)) + scale_size(range = c(5, 15)) +
-  xlab("Post Content Type") + ylab("Engagement Type") +
-  coord_flip() + theme(text = element_text(size=20))
-
-plot(p)
-
-p <- ultra %>%
-  filter(type != "Music") %>%
-  filter(from_name == "Michelob ULTRA") %>%
-  ggplot(., aes(x = type, y = count_name)) + 
-  stat_sum(aes(group = value, color = type)) + scale_size(range = c(5, 15)) +
-  xlab("Post Content Type") + ylab("Engagement Type") + 
-  coord_flip() + theme(text = element_text(size=20))
-
-plot(p)
-
-# Create Vertical summary_stats for bud
-summary_stats <- gather(summary_stats, Engagement, Number, Comments:Total.Posts)
-bud <- bud %>%
-  select(from_name, type, likes_count, comments_count, shares_count) %>%
-  gather(count_name, value, likes_count:shares_count)
-
-# Plots for Engagement by Type for bud
-bud$type <- as.character(bud$type)
-bud$type[bud$type == "photo"] <- "Photo"
-
-bud$type <- as.character(bud$type)
-bud$type[bud$type == "video"] <- "Video"
-
-bud$type <- as.character(bud$type)
-bud$type[bud$type == "link"] <- "Link"
-
-bud$type <- as.character(bud$type)
-bud$type[bud$type == "status"] <- "Status"
-
-bud$type <- as.character(bud$type)
-bud$type[bud$type == "music"] <- "Music"
-
-bud$type <- as.character(bud$type)
-bud$type[bud$type == "event"] <- "Event"
-
-bud$count_name <- as.character(bud$count_name)
-bud$count_name[bud$count_name == "likes_count"] <- "Likes"
-
-bud$count_name <- as.character(bud$count_name)
-bud$count_name[bud$count_name == "shares_count"] <- "Shares"
-
-bud$count_name <- as.character(bud$count_name)
-bud$count_name[bud$count_name == "comments_count"] <- "Comments"
-
-
-### Matrix Content Engagement for bud###
-p <- bud %>%
-  filter(type != "Music") %>%
-  ggplot(., aes(x = type, y = count_name)) + 
-  stat_sum(aes(group = value, color = type)) + scale_size(range = c(5, 15)) +
-  xlab("Post Content Type") + ylab("Engagement Type") +
-  coord_flip() + theme(text = element_text(size=20))
-
-plot(p)
-
-p <- bud %>%
-  filter(type != "Music") %>%
-  filter(from_name == "Bud Light") %>%
-  ggplot(., aes(x = type, y = count_name)) + 
-  stat_sum(aes(group = value, color = type)) + scale_size(range = c(5, 15)) +
-  xlab("Post Content Type") + ylab("Engagement Type") + 
-  coord_flip() + theme(text = element_text(size=20))
-
-plot(p)
-
-
-
-### Matrix Content Engagement ###
-
 
 # Summary Plots
 p <- summary_stats %>%
