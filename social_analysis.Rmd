@@ -1,5 +1,8 @@
 ---
-title: "beer_analysis"
+title: "Labatt Playbook Analysis"
+subtitle: "Social Media Analysis to support Quench new business proposal"
+author: "WildFig"
+date: "`r Sys.Date()`"
 output: 
   html_document:
     toc: yes
@@ -8,8 +11,33 @@ output:
     toc: yes
 ---
 
+## Executive Summary
+
+```{r, echo=FALSE}
+# This is a bulleted point list of primary insights
+```
+
+- Insight 1
+- Insight 2
+- Insight 3
+
+
+## Abstract
+
+```{r, echo=FALSE}
+# This is a textual overview of all the work and the primary findings we found.  This should be written from the context that a brand manager could take the text and place in an email to a client
+```
+
+
+## Introduction
+
+```{r, echo=FALSE}
+# This section is meant to contain our objectives and any hypotheses we are testing (last paragraph), as well as any information or summaries of research materials we used in preparation for our analysis or for our insights.  
+```
+
 ## Methods
 
+### Data Collection
 Data was imported using the `\data_gathering.RMD` script.  See that script for details of collection.  
 
 
@@ -35,7 +63,7 @@ client_ids <- c(134391846723545, 424106561004308, 57921319808, 54876245094)
 ```
 
 
-## Data Shaping
+### Data Shaping
 
 Taking in raw data and adding a parseable timestamp while filtering on the date and client_ids.
 
@@ -85,7 +113,8 @@ Total.Posts <- c(nrow(labatt), nrow(molson), nrow(ultra), nrow(bud))
 summary_stats <- data.frame(Company, Comments, Likes, Shares, Total.Posts)
 ```
 
-## Function Definition
+### Function Definition
+
 
 Define functions to create posts per day of week graphs, and timeseries of engagement line graphs.
 
@@ -109,7 +138,7 @@ timeseries_engagement <- function(client) {
 ```
 
 
-## Additional Data Shaping for Engagement
+### Additional Data Shaping for Engagement
 
 Shape data into vertical data formats.
 
@@ -183,8 +212,32 @@ all_engagement$count_name[all_engagement$count_name == "comments_count"] <- "Com
 
 ```
 
+```{r FeatureEng, echo=FALSE}
+# Create a day of week vector
+all_companies_ts$dow <- wday(all_companies_ts$timestamp, label=TRUE)
 
-## Matrices plots of Engagement
+# Create a time of day vector
+library(chron)
+all_companies_ts$tod <- hours(all_companies_ts$timestamp)
+
+
+
+
+```
+
+
+## Results
+
+### Summary Statistics
+
+- Lets start here with a table of summary statistics
+```{r sumTablePrep, echo=FALSE}
+dat <- as_data_frame(all_companies_ts)
+class(dat)
+
+```
+
+### Matrices plots of Engagement
 
 First plot is aggregated engagement by content type. Second plot, it engagement by type for client(Labatt).
 
@@ -192,11 +245,14 @@ First plot is aggregated engagement by content type. Second plot, it engagement 
 p <- all_engagement %>%
   filter(type != "Music") %>%
   ggplot(., aes(x = type, y = count_name)) + 
-  facet_grid(~from_name) +
-  stat_sum(aes(group = value, color = type)) + scale_size(range = c(5, 15)) +
-  xlab("Post Content Type") + ylab("Engagement Type") +
-  coord_flip() + theme(text = element_text(size=10)) +
-  ggtitle("Aggregated Engagement by Content Type (2015-Present)")
+   facet_grid(~from_name) +
+   stat_sum(aes(group = value, color = type)) + 
+   scale_size(range = c(5, 15)) +
+   xlab("Post Content Type") + 
+   ylab("Engagement Type") +
+   coord_flip() + 
+   theme(text = element_text(size=10)) +
+   ggtitle("Aggregated Engagement by Content Type (2015-Present)")
 
 plot(p)
 ```
@@ -219,9 +275,9 @@ plot(p)
 
 
 
-- [ ] TODO: we need to compare posting activity with engagement activity
+- [ ] TODO: we need to compare posting activity with engagement activity (scatter plot)
 
-## Summary Plots
+### Summary Plots
 
 Horizontal stacked bar chart for total engagement comparison of all companies
 
@@ -239,7 +295,10 @@ p <- summary_stats %>%
 plot(p)
 ```
 
-## Day of Week ##
+- [ ] TODO: Create a scaled version of the stacked eng bar chart that is scaled by the number of fans for each bar.  
+
+
+### Day of Week
 
 Total posts per day of the week.
 ```{r day_of_week, include = TRUE}
@@ -262,6 +321,8 @@ p <- ggplot(data = all_companies_ts, aes(x = wday(timestamp, label = TRUE))) +
 plot(p)
 ```
 
+
+- What is the total number of posts?  
 ```{r Eng_day_of_week, include = TRUE}
 dowDat <- select(all_companies_ts, total_engagement,from_name, timestamp)
 dowDat$dow <- wday(dowDat$timestamp, label=TRUE)
@@ -277,14 +338,39 @@ p <- ggplot(dowDat, aes(x = dow, y = total_engagement)) +
 plot(p)
 ```
 
-- [ ] TODO: Create a plot for Post by engagement graphics (scatter plot).  To answer the question on days with lots of posts do we get lots of engagment. 
+-[ ] TODO: Create a plot for Post by engagement graphics (scatter plot).  To answer the question on days with lots of posts do we get lots of engagment. 
 
 - [ ] TODO: With that data we can ask what posts get the most engagment, we can look at top engagment and bottom engagements posts and what qualities they share or differ by.  
 
+- [ ] We need DOW post activity by months.
 
+- [X] Time of day visual break down?
 
+### Engagement by Time of Day (TOD)
 
-## Timeseries Engagement ##
+```{r EngTod, echo=FALSE}
+all_companies_ts %>%
+  select(from_name, total_engagement, tod) %>%
+  ggplot(., aes(y=total_engagement, x = factor(tod))) +
+  geom_boxplot() +
+  facet_wrap(~from_name) +
+  ggtitle("Facebook Brand Engagement by time of day") +
+  ylab("Total Engagment") + xlab("Time of Day")
+```
+
+```{r EngTodNoBudorUltra, echo=FALSE}
+all_companies_ts %>%
+  filter(from_name != "Bud Light" ) %>%
+  filter(from_name != "Michelob ULTRA") %>%
+  select(from_name, total_engagement, tod) %>%
+  ggplot(., aes(y=total_engagement, x = factor(tod))) +
+  geom_boxplot() +
+  facet_wrap(~from_name) +
+  ggtitle("Facebook Brand Engagement by time of day (w/o Bud and Mich ULTRA)") +
+  ylab("Total Engagment") + xlab("Time of Day")
+```
+
+### Timeseries Engagement 
 Plots for the timeseries engagement line.
 ```{r line_timeseries_engagement, include = TRUE}
 for(i in seq_along(df_names)) {
@@ -293,7 +379,7 @@ for(i in seq_along(df_names)) {
 }
 ```
 
-## Initial Visualization of engagement over time on a line ##
+### Initial Visualization of engagement over time on a line
 
 Test viz, showed spike in enegagment for Bud Light in august 2016.
 ```{r test_viz, include = TRUE}
@@ -328,8 +414,8 @@ all_companies_ts %>%
   summarise(totEng = sum(total_engagement)) %>%
   ggplot(., aes(x = month, y = totEng)) +
    geom_point(aes(color = from_name)) +
-  geom_smooth(aes(color = from_name)) +
-  ggtitle("Monthly Facebook Engagement w/o Bud & MichULTRA")
+   geom_smooth(aes(color = from_name), se = FALSE) +
+   ggtitle("Monthly Facebook Engagement w/o Bud & MichULTRA")
 ```
 
 - This is an interesting drop of ~30% over the first 6 months of 2015.  The brand has still not recovered from that reduction.  
@@ -338,7 +424,7 @@ all_companies_ts %>%
 - Might be valuable to look back at the entire timeseries for periods of  distinct dynamism.
    
 
-## Labatt Wordclouds ##
+### Labatt Wordclouds
 Removed filter because labatt does not have significant inflection point whereas previous analysis
 ```{r labatt_wordclouds, include = TRUE}
 labatt$timestamp <- date(labatt$timestamp)
@@ -368,7 +454,7 @@ wordcloud(words = labatt_corpus_pre, scale=c(5,0.1), max.words=25, random.order=
           rot.per=0.35, use.r.layout=FALSE, colors=pal)
 ```
 
-## Point Graphs for Posts ##
+### Point Graphs for Posts
 Displays engagement per post to find outliers.
 ```{r point_engagement, include = TRUE}
 p <- ggplot(all_companies_ts, aes(x = month, y = total_engagement)) +
@@ -381,25 +467,25 @@ p <- ggplot(all_companies_ts, aes(x = month, y = total_engagement)) +
 plot(p)
 ```
 
-## Total Engagement Line ##
+### Total Engagement Line
 ```{r total_engagement_line, include = TRUE}
-q <- aggregate(all_companies_ts$total_engagement~all_companies_ts$month+
-                 all_companies_ts$from_name,
-               FUN=sum)
-
-ggplot(q, aes(x = q$`all_companies_ts$month`, y = q$`all_companies_ts$total_engagement`)) +
-  geom_line(aes(color=q$`all_companies_ts$from_name`)) +
-  ylab("Total Engagement") + xlab("Year") +
-  theme(legend.title=element_blank(), 
-        legend.text=element_text(size=12), 
-        legend.position=c(0.18, 0.77), 
-        legend.background=element_rect(fill=alpha('gray', 0)))
+# q <- aggregate(all_companies_ts$total_engagement~all_companies_ts$month+
+#                  all_companies_ts$from_name,
+#                FUN=sum)
+# 
+# ggplot(q, aes(x = q$`all_companies_ts$month`, y = q$`all_companies_ts$total_engagement`)) +
+#   geom_line(aes(color=q$`all_companies_ts$from_name`)) +
+#   ylab("Total Engagement") + xlab("Year") +
+#   theme(legend.title=element_blank(), 
+#         legend.text=element_text(size=12), 
+#         legend.position=c(0.18, 0.77), 
+#         legend.background=element_rect(fill=alpha('gray', 0)))
 ```
 
 
 
 
-## Engagement by Company ##
+### Engagement by Company
 ```{r engagement_by_company, include = TRUE}
 ### molson Content Over Time ###
 t <- all_companies_ts %>%
@@ -433,13 +519,15 @@ t <- data.frame(table(t$month, t$type))
 t$Var1 <- date(t$Var1)
 ggplot(t, aes(x = Var1, y = Freq, group = Var2)) +
   geom_line(aes(color=Var2)) +
-  ggtitle('Labatt Engagement') +
+  ggtitle('Labatt Facebook Activity') +
   xlab("Year") + ylab("Post Frequency") +
   theme(legend.title=element_blank(), 
         legend.text=element_text(size=12), 
         legend.position=c(0.18, 0.77), 
         legend.background=element_rect(fill=alpha('gray', 0)))
+```
 
+```{r}
 #Labatt Content Over Time
 
 #MichelobULTRA Content Over Time ###
@@ -456,7 +544,12 @@ ggplot(t, aes(x = Var1, y = Freq, group = Var2)) +
         legend.text=element_text(size=12), 
         legend.position=c(0.18, 0.77), 
         legend.background=element_rect(fill=alpha('gray', 0)))
+```
 
+
+- Is this true?  TODO: Verify that these are the only content types for Molson.
+
+```{r}
 #Labatt Content Over Time
 
 #Bud Light Content Over Time ###
@@ -474,8 +567,6 @@ ggplot(t, aes(x = Var1, y = Freq, group = Var2)) +
         legend.position=c(0.18, 0.77), 
         legend.background=element_rect(fill=alpha('gray', 0)))
 ```
-
-<<<<<<< HEAD
 
 
 
@@ -496,7 +587,7 @@ I found an example on [Stackoverflow](http://stackoverflow.com/questions/2716822
 ```
 
 
-
+### Experiment with Hashtag extraction
 ```{r hashExtract, eval=FALSE}
 LabattUSA_timeline %>% 
   filter()
@@ -557,21 +648,67 @@ MakeWordCloud <- function(corpus) {
 MakeWordCloud(new_corpus)
 ```
 
-## Mosaic Plot Experiment
+### Mosaic Plot Experiment
 
 
+- [ ] TODO: Full timeseries of total eng by brand.  (To look for seasonality) - if sports are a driver than seasonality might be important 
+- [ ] Populate a table of top performing posts and low performing posts - Tristen can pull shot of tweets for discussion
+- [ ] Create a data.frame with these columns brand, data, tweet, engagement (I think this is a subset of all_companies)
 
 
+- [ ] summary table of brand, month, totEng, see examples:http://leonawicz.github.io/HtmlWidgetExamples/ex_dt_sparkline.html
 
 
-
-=======
-## Kevins Questions ##
-```{r kevins_questions, include = TRUE}
-load('processed_data/bud_fb.RData')
-bud$total_engagement <- rowSums(bud[,9:11])
-z <- bud %>%
-  arrange(desc(total_engagement))
-head(z)
+```{r}
+all_companies_ts %>%
+  select(from_name, timestamp, total_engagement) %>%
+  group_by(from_name, month(timestamp), year(timestamp)) %>%
+  summarise(count = n(), 
+            engagement = sum(total_engagement)) %>%
+  ggplot(., aes(y = log(engagement), x = log(count), colour = from_name)) +
+  geom_point() +
+  geom_smooth(se = FALSE, method = "lm") +
+  #geom_smooth(se = FALSE)
+  ggtitle("Engagement vs Post Acitivity")
 ```
->>>>>>> origin/master
+
+
+
+
+
+```{r}
+
+all_companies_ts %>%
+  #filter(from_name != "Bud Light" ) %>%
+  #filter(from_name != "Michelob ULTRA") %>%
+  select(from_name, timestamp, total_engagement) %>%
+  group_by(from_name, month(timestamp), year(timestamp)) %>%
+  summarise(count = n(),
+            engagement = sum(total_engagement)) %>%
+  ggplot(., aes(y = engagement, x = count, colour = from_name)) +
+  geom_point() +
+  geom_smooth(se = FALSE, method = "lm") +
+  ggtitle("Engagement vs Post Acitivity") +
+  ylab("Total Engagement") + xlab("Total Monthly Posts")
+```
+
+- There is a positive relationship between post activity (ie counts) and total engagement.  
+
+
+
+- [ ] TOD vs engagement similar to post activity vs Engagement
+
+
+### Kevins Questions 
+```{r kevins_questions, include = TRUE}
+# load('processed_data/bud_fb.RData')
+# bud$total_engagement <- rowSums(bud[,9:11])
+# z <- bud %>%
+#   arrange(desc(total_engagement))
+# head(z)
+#<<<<<<< Updated upstream
+```
+
+
+## Discussion
+
