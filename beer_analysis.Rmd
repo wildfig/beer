@@ -560,11 +560,6 @@ MakeWordCloud(new_corpus)
 ## Mosaic Plot Experiment
 
 
-
-
-
-
-
 =======
 ## Kevins Questions ##
 ```{r kevins_questions, include = TRUE}
@@ -574,4 +569,10 @@ z <- bud %>%
   arrange(desc(total_engagement))
 head(z)
 ```
->>>>>>> origin/master
+
+
+## Twitter Sentiment Analysis ##
+
+```{r sentiment, include = TRUE}
+
+```

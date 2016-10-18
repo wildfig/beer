@@ -127,6 +127,17 @@ Total.Posts <- c(1315, 517, 3484, 6927)
 summary_stats <- data.frame(Company, Comments, Likes, Shares, Total.Posts)
 all_companies <- rbind(labatt, molson, ultra, bud)
 
+Twitter_Likes <- c(sum(LabattUSA_timeline$favoriteCount), sum(Molson_Canadian_timeline$favoriteCount), sum(MichelobULTRA_timeline$favoriteCount), sum(budlight_timeline$favoriteCount))
+Twitter_Statuses <- c(LabattUSA_user$statusesCount, Molson_Canadian_user$statusesCount, MichelobULTRA_user$statusesCount, budlight_user$statusesCount)
+Twitter_Followers <- c(LabattUSA_user$followersCount, Molson_Canadian_user$followersCount, MichelobULTRA_user$followersCount, budlight_user$followersCount)
+Twitter_Retweets <- c(sum(LabattUSA_timeline$retweetCount), sum(Molson_Canadian_timeline$retweetCount), sum(MichelobULTRA_timeline$retweetCount), sum(budlight_timeline$retweetCount))
+Twitter_EngagementPerUser <- c(
+((sum(LabattUSA_timeline$favoriteCount) + sum(LabattUSA_timeline$retweetCount))/LabattUSA_user$followersCount),((sum(Molson_Canadian_timeline$favoriteCount) + sum(Molson_Canadian_timeline$retweetCount))/Molson_Canadian_user$followersCount),((sum(MichelobULTRA_timeline$favoriteCount) + sum(MichelobULTRA_timeline$retweetCount))/MichelobULTRA_user$followersCount),((sum(budlight_timeline$favoriteCount) + sum(budlight_timeline$retweetCount))/budlight_user$followersCount)
+)
+twitter_summary_stats <- data.frame(Company, Twitter_Followers, Twitter_Statuses, Twitter_Likes, Twitter_Retweets, Twitter_EngagementPerUser)
+
+save(twitter_summary_stats, file = 'processed_data/twitter_summary_stats.RData')
+
 # Save Summary Object
 save(summary_stats, file = 'processed_data/summary_stats.RData')
 save(all_companies, file = 'processed_data/all_companies.RData')

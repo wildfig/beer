@@ -1,0 +1,825 @@
+---
+title: "Labatt Playbook Analysis"
+author: "WildFig"
+date: '`r Sys.Date()`'
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+  html_notebook:
+    toc: yes
+  word_document:
+    toc: yes
+subtitle: Social Media Analysis to support Quench new business proposal
+---
+
+## Executive Summary
+
+```{r, echo=FALSE}
+# This is a bulleted point list of primary insights
+```
+
+- Insight 1
+- Insight 2
+- Insight 3
+
+
+## Abstract
+
+```{r, echo=FALSE}
+# This is a textual overview of all the work and the primary findings we found.  This should be written from the context that a brand manager could take the text and place in an email to a client
+```
+
+
+## Introduction
+
+```{r, echo=FALSE}
+# This section is meant to contain our objectives and any hypotheses we are testing (last paragraph), as well as any information or summaries of research materials we used in preparation for our analysis or for our insights.  
+```
+
+## Methods
+
+### Data Collection
+Data was imported using the `\data_gathering.RMD` script.  See that script for details of collection.  
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+libs <- c('tidyr', 'broom', 'dplyr', 'ggplot2', 'ggfortify', 'tidytext', 'readr', 'stringr',
+          'jsonlite', 'pander', 'Rfacebook', 'twitteR', 'lubridate', 'scales', 'wordcloud', 'SnowballC',
+          'tm', 'syuzhet', 'tidyr', 'xts')
+lapply(libs, library, character.only = TRUE)
+remove(libs)
+
+filenames <- list.files(path = 'processed_data/', pattern = '*.RData', full.names = TRUE)
+lapply(filenames, load, .GlobalEnv)
+remove(filenames)
+
+df_names <- c('labatt', 'molson', 'ultra', 'bud')
+client_names <- c('Labatt_USA', 'Molson_Canadian', 'Michelob_ULTRA', 'budlight')
+client_names_proper <- c('Labatt USA', 'Molson Canadian', 'Michelob ULTRA', 'Bud Light')
+client_ids <- c(134391846723545, 424106561004308, 57921319808, 54876245094)
+
+# rmarkdown::render('beer_analysis.Rmd', output_file = 'documents/beer_analysis.html')
+```
+
+```{r pander}
+pander(twitter_summary_stats)
+pander(summary_stats)
+```
+### Data Shaping
+
+Taking in raw data and adding a parseable timestamp while filtering on the date and client_ids.
+
+```{r data_shaping, include = FALSE}
+labatt$timestamp <- ymd_hms(labatt$created_time)
+labatt$timestamp <- with_tz(labatt$timestamp, "America/New_York")
+
+molson$timestamp <- ymd_hms(molson$created_time)
+molson$timestamp <- with_tz(molson$timestamp, "America/New_York")
+
+ultra$timestamp <- ymd_hms(ultra$created_time)
+ultra$timestamp <- with_tz(ultra$timestamp, "America/New_York")
+
+bud$timestamp <- ymd_hms(bud$created_time)
+bud$timestamp <- with_tz(bud$timestamp, "America/New_York")
+
+all_companies_ts <- rbind(labatt, molson, ultra, bud)
+all_companies_ts <- subset(all_companies_ts, select = -c(message, created_time, link, id))
+all_companies_ts$total_engagement <- rowSums(all_companies_ts[5:7])
+
+all_companies_ts <- all_companies_ts %>%
+  filter(from_id %in% client_ids)
+
+labatt <- labatt %>%
+  filter(from_id %in% client_ids)
+
+molson <- molson %>%
+  filter(from_id %in% client_ids)
+
+ultra <- ultra %>%
+  filter(from_id %in% client_ids)
+
+bud <- bud %>%
+  filter(from_id %in% client_ids)
+
+# Build Summary Stats DataFrame
+Company <- c('Labatt USA', 'Molson Canadian', 'Michelob ULTRA', 'Bud Light')
+Comments <- c(sum(labatt$comments_count), sum(molson$comments_count), sum(ultra$comments_count), sum(bud$comments_count))
+Likes <- c(sum(labatt$likes_count), sum(molson$likes_count), sum(ultra$likes_count), sum(bud$likes_count))
+Shares <- c(sum(labatt$shares_count), sum(molson$shares_count), sum(ultra$shares_count), sum(bud$shares_count))
+Total.Posts <- c(nrow(labatt), nrow(molson), nrow(ultra), nrow(bud))
+summary_stats <- data.frame(Company, Comments, Likes, Shares, Total.Posts)
+```
+
+
+### Function Definition
+
+
+Define functions to create posts per day of week graphs, and timeseries of engagement line graphs.
+
+```{r functions, include = FALSE}
+day_of_week <- function(df, client) {
+  r <- get(df) %>%
+    filter(from_id %in% client_ids)
+  ggplot(data = r, aes(x = wday(timestamp, label = TRUE))) +
+    geom_bar(aes(fill = ..count..)) +
+    theme(legend.position = "none") + expand_limits(y=c(0,100)) + scale_y_continuous(breaks = c(0, 100, 200, 300, 400)) +
+    xlab("Day of the Week") + ylab("Number of Posts") +
+    scale_fill_gradient(low = "midnightblue", high = "aquamarine4")
+}
+
+timeseries_engagement <- function(client) {
+  r <- all_companies_ts 
+  r <- filter(r, from_name == client)
+  ggplot(data = r, aes(x = timestamp, y = total_engagement)) + 
+    geom_line(size = 1)
+}
+```
+
+
+### Additional Data Shaping for Engagement
+
+Shape data into vertical data formats.
+
+```{r addtl_data_shaping, include = FALSE}
+# Create Vertical summary_stats for Labatt
+summary_stats <- gather(summary_stats, Engagement, Number, Comments:Total.Posts)
+labatt_engagement <- labatt %>%
+  select(from_name, type, likes_count, comments_count, shares_count) %>%
+  gather(count_name, value, likes_count:shares_count)
+
+all_engagement <- all_companies_ts %>%
+  select(from_name, type, likes_count, comments_count, shares_count) %>%
+  gather(count_name, value, likes_count:shares_count)
+
+# Plots for Engagement by Type for Labatt
+labatt_engagement$type <- as.character(labatt_engagement$type)
+labatt_engagement$type[labatt_engagement$type == "photo"] <- "Photo"
+
+labatt_engagement$type <- as.character(labatt_engagement$type)
+labatt_engagement$type[labatt_engagement$type == "video"] <- "Video"
+
+labatt_engagement$type <- as.character(labatt_engagement$type)
+labatt_engagement$type[labatt_engagement$type == "link"] <- "Link"
+
+labatt_engagement$type <- as.character(labatt_engagement$type)
+labatt_engagement$type[labatt_engagement$type == "status"] <- "Status"
+
+labatt_engagement$type <- as.character(labatt_engagement$type)
+labatt_engagement$type[labatt_engagement$type == "music"] <- "Music"
+
+labatt_engagement$type <- as.character(labatt_engagement$type)
+labatt_engagement$type[labatt_engagement$type == "event"] <- "Event"
+
+labatt_engagement$count_name <- as.character(labatt_engagement$count_name)
+labatt_engagement$count_name[labatt_engagement$count_name == "likes_count"] <- "Likes"
+
+labatt_engagement$count_name <- as.character(labatt_engagement$count_name)
+labatt_engagement$count_name[labatt_engagement$count_name == "shares_count"] <- "Shares"
+
+labatt_engagement$count_name <- as.character(labatt_engagement$count_name)
+labatt_engagement$count_name[labatt_engagement$count_name == "comments_count"] <- "Comments"
+
+# All Engagement
+all_engagement$type <- as.character(all_engagement$type)
+all_engagement$type[all_engagement$type == "photo"] <- "Photo"
+
+all_engagement$type <- as.character(all_engagement$type)
+all_engagement$type[all_engagement$type == "video"] <- "Video"
+
+all_engagement$type <- as.character(all_engagement$type)
+all_engagement$type[all_engagement$type == "link"] <- "Link"
+
+all_engagement$type <- as.character(all_engagement$type)
+all_engagement$type[all_engagement$type == "status"] <- "Status"
+
+all_engagement$type <- as.character(all_engagement$type)
+all_engagement$type[all_engagement$type == "music"] <- "Music"
+
+all_engagement$type <- as.character(all_engagement$type)
+all_engagement$type[all_engagement$type == "event"] <- "Event"
+
+all_engagement$count_name <- as.character(all_engagement$count_name)
+all_engagement$count_name[all_engagement$count_name == "likes_count"] <- "Likes"
+
+all_engagement$count_name <- as.character(all_engagement$count_name)
+all_engagement$count_name[all_engagement$count_name == "shares_count"] <- "Shares"
+
+all_engagement$count_name <- as.character(all_engagement$count_name)
+all_engagement$count_name[all_engagement$count_name == "comments_count"] <- "Comments"
+
+```
+
+```{r FeatureEng, echo=FALSE}
+# Create a day of week vector
+all_companies_ts$dow <- wday(all_companies_ts$timestamp, label=TRUE)
+
+# Create a time of day vector
+library(chron)
+all_companies_ts$tod <- hours(all_companies_ts$timestamp)
+```
+
+## Results
+
+### Summary Statistics
+
+- Lets start here with a table of summary statistics
+```{r sumTablePrep, echo=FALSE}
+dat <- as_data_frame(all_companies_ts)
+class(dat)
+```
+
+### Matrices plots of Engagement
+
+First plot is aggregated engagement by content type. Second plot, it engagement by type for client(Labatt).
+
+```{r matrix_engagement, include = TRUE, echo = FALSE}
+p <- all_engagement %>%
+  filter(type != "Music") %>%
+  ggplot(., aes(x = type, y = count_name)) + 
+   facet_grid(~from_name) +
+   stat_sum(aes(group = value, color = type)) + 
+   scale_size(range = c(5, 15)) +
+   xlab("Post Content Type") + 
+   ylab("Engagement Type") +
+   coord_flip() + 
+   theme(text = element_text(size=10)) +
+   ggtitle("Aggregated Engagement by Content Type(Facebook)")
+
+plot(p)
+```
+
+- As *Bud Light* and *Michelob ULTRA* are the to companies with the highest engagement, comparison of 
+
+```{r matrix_engagement2, include = TRUE, echo = FALSE}
+p <- labatt_engagement %>%
+  filter(type != "Music") %>%
+  filter(from_name == "Labatt USA") %>%
+  ggplot(., aes(x = type, y = count_name)) + 
+  stat_sum(aes(group = value, color = type)) + scale_size(range = c(5, 15)) +
+  xlab("Post Content Type") + ylab("Engagement Type") + 
+  coord_flip() + theme(text = element_text(size=10)) +
+  ggtitle("Labatt Agg. Engagement by Content Type(Facebook)")
+plot(p)
+```
+
+- Looking at the engagement by content type we see that **Labatt** is garnering its most significant engagment on Photos, Video, and Links.  
+
+
+
+- [ ] TODO: we need to compare posting activity with engagement activity (scatter plot)
+
+### Summary Plots
+
+Horizontal stacked bar chart for total engagement comparison of all companies
+
+```{r summary_plots, include = TRUE}
+reorder_size <- function(x) {
+  factor(x, levels = names(sort(table(x))))
+}
+p <- summary_stats %>%
+  filter(Engagement != "Total.Posts") %>%
+  ggplot(., aes(x = Company, y = log(Number), fill = Engagement)) +
+  geom_bar(stat = "identity") +
+  xlab('Brand') + ylab('Engagement(Scaled)') +
+  ggtitle('Logarithmic Transformation of Total Engagement(Facebook)') +
+  coord_flip()
+
+plot(p)
+```
+
+### Day of Week
+
+Total posts per day of the week.
+```{r day_of_week, include = TRUE}
+# without brand ID these are uninformative
+for(i in seq_along(df_names)) {
+  p <- day_of_week(df_names[i], client_names[i])
+  plot(p)
+}
+```
+
+
+```{r Posts_day_of_week, include = TRUE}
+p <- ggplot(data = all_companies_ts, aes(x = wday(timestamp, label = TRUE))) +
+  geom_bar(aes(fill = ..count..)) +
+  theme(legend.position = "none") +
+  xlab("Day of the Week") + ylab("Number of Posts") +
+  scale_fill_gradient(low = "midnightblue", high = "aquamarine4") + 
+  facet_wrap(~from_name, ncol = 4) +
+  ggtitle("Daily Posting Activity by Brand(Facebook)")
+plot(p)
+```
+
+
+- What is the total number of posts?  
+```{r Eng_day_of_week, include = TRUE}
+dowDat <- select(all_companies_ts, total_engagement,from_name, timestamp)
+dowDat$dow <- wday(dowDat$timestamp, label=TRUE)
+dowDat <- aggregate(total_engagement~dow+from_name, data=dowDat, FUN=mean)
+
+p <- ggplot(dowDat, aes(x = dow, y = total_engagement)) +
+  geom_bar(stat="identity", aes(fill = total_engagement)) + 
+  facet_grid(~from_name) + 
+  ggtitle('Engagements Per Day of Week(Facebook)') +
+  theme(legend.position = "none") +
+  xlab("Day of the Week") + ylab("Number of Engagements") +
+  scale_fill_gradient(low = "midnightblue", high = "aquamarine4")
+plot(p)
+```
+
+-[ ] TODO: Create a plot for Post by engagement graphics (scatter plot).  To answer the question on days with lots of posts do we get lots of engagment. 
+
+```{r}
+mdat <- all_companies_ts
+mdat$month <- format(as.POSIXct(mdat$timestamp), '%m')
+mdat %>%
+  ggplot(aes(month, log(total_engagement))) +
+  geom_boxplot() +
+  ggtitle('Engagment grouped by Month(Facebook)') + ylab('Engagement') + xlab('Month') +
+  facet_grid(from_name ~ ., scales = "free")
+```
+
+
+
+
+- [] TODO: With that data we can ask what posts get the most engagment, we can look at top engagment and bottom engagements posts and what qualities they share or differ by.  
+
+### Engagement by Time of Day (TOD)
+
+```{r EngTod, echo=FALSE}
+all_companies_ts %>%
+  select(from_name, total_engagement, tod) %>%
+  ggplot(., aes(y=total_engagement, x = factor(tod))) +
+  geom_boxplot() +
+  facet_wrap(~from_name) +
+  ggtitle("Facebook Brand Engagement by time of day") +
+  ylab("Total Engagment") + xlab("Time of Day")
+```
+
+```{r EngTodNoBudorUltra, echo=FALSE}
+all_companies_ts %>%
+  filter(from_name != "Bud Light" ) %>%
+  filter(from_name != "Michelob ULTRA") %>%
+  select(from_name, total_engagement, tod) %>%
+  ggplot(., aes(y=total_engagement, x = factor(tod))) +
+  geom_boxplot() +
+  facet_wrap(~from_name) +
+  ggtitle("Facebook Brand Engagement by time of day (w/o Bud and Mich ULTRA)") +
+  ylab("Total Engagment") + xlab("Time of Day")
+```
+
+### Timeseries Engagement 
+Plots for the timeseries engagement line.
+```{r line_timeseries_engagement, include = TRUE}
+for(i in seq_along(df_names)) {
+  p <- timeseries_engagement(client_names_proper[i])
+  plot(p)
+}
+```
+
+### Initial Visualization of engagement over time on a line
+
+```{r test_viz, include = TRUE}
+all_companies_ts <- all_companies_ts %>%
+  filter(from_id %in% client_ids) %>%
+  mutate(month = as.Date(cut(all_companies_ts$timestamp, breaks = "month")))
+
+all_companies_ts %>%
+  select(from_name, month, total_engagement) %>%
+  group_by(from_name,month) %>%
+  summarise(totEng = sum(total_engagement)) %>%
+  ggplot(., aes(x = month, y = totEng)) +
+  ylab('Total Engagements') + xlab('Years') +
+  geom_point(aes(color = from_name)) + ylim(0, 2200000) +
+  ggtitle('Engagement Over Time(Facebook)') +
+  geom_smooth(aes(color = from_name), se = FALSE)
+```
+
+
+
+```{r}
+all_companies_ts %>%
+  select(from_name, month, total_engagement, timestamp) %>%
+  filter(from_name != "Bud Light" ) %>%
+  filter(from_name != "Michelob ULTRA") %>%
+  filter(year(timestamp) %in% c('2015', '2016')) %>%
+  group_by(from_name,month) %>%
+  summarise(totEng = sum(total_engagement)) %>%
+  ggplot(., aes(x = month, y = totEng)) +
+   geom_point(aes(color = from_name)) +
+   geom_smooth(aes(color = from_name), se = FALSE) +
+   ggtitle("Monthly Facebook Engagement Labatt vs Molson")
+```
+
+- This is an interesting drop of ~30% over the first 6 months of 2015.  The brand has still not recovered from that reduction.  
+   + What is different about the content during this period?
+   
+- Might be valuable to look back at the entire timeseries for periods of  distinct dynamism.
+   
+
+### Labatt Wordclouds
+Removed filter because labatt does not have significant inflection point whereas previous analysis
+```{r labatt_wordclouds, include = TRUE}
+labatt$timestamp <- date(labatt$timestamp)
+
+labatt_clean_pre <- str_replace_all(labatt$message, "@\\w+", "")
+labatt_clean_pre <- gsub("&amp", "", labatt_clean_pre)
+labatt_clean_pre <- gsub("(RT|via)((?:\\b\\W*@\\w+)+)", "", labatt_clean_pre)
+labatt_clean_pre <- gsub("@\\w+", "", labatt_clean_pre)
+labatt_clean_pre <- gsub("[[:punct:]]", "", labatt_clean_pre)
+labatt_clean_pre <- gsub("[[:digit:]]", "", labatt_clean_pre)
+labatt_clean_pre <- gsub("http\\w+", "", labatt_clean_pre)
+labatt_clean_pre <- gsub("[ \t]{2,}", "", labatt_clean_pre)
+labatt_clean_pre <- gsub("^\\s+|\\s+$", "", labatt_clean_pre)
+
+labatt_corpus_pre <- Corpus(VectorSource(labatt_clean_pre))
+labatt_corpus_pre <- tm_map(labatt_corpus_pre, removePunctuation)
+labatt_corpus_pre <- tm_map(labatt_corpus_pre, content_transformer(tolower))
+labatt_corpus_pre <- tm_map(labatt_corpus_pre, removeWords, stopwords("english"))
+labatt_corpus_pre <- tm_map(labatt_corpus_pre, removeWords, c("amp", "2yo", "3yo", "4yo"))
+labatt_corpus_pre <- tm_map(labatt_corpus_pre, stripWhitespace)
+
+pal <- brewer.pal(9,"YlGnBu")
+pal <- pal[-(1:4)]
+set.seed(123)
+
+wordcloud(words = labatt_corpus_pre, scale=c(5,0.1), max.words=25, random.order=FALSE, 
+          rot.per=0.35, use.r.layout=FALSE, colors=pal)
+```
+
+### Point Graphs for Posts
+Displays engagement per post to find outliers.
+```{r point_engagement, include = TRUE}
+p <- ggplot(all_companies_ts, aes(x = month, y = total_engagement)) +
+  geom_point(aes(color = from_name)) +
+  xlab("Year") + ylab("Total Engagement") + 
+  theme(legend.title=element_blank(), 
+        legend.text=element_text(size=12), 
+        legend.position=c(0.18, 0.77), 
+        legend.background=element_rect(fill=alpha('gray', 0)))
+plot(p)
+```
+
+### Total Engagement Line
+```{r total_engagement_line, include = TRUE}
+# q <- aggregate(all_companies_ts$total_engagement~all_companies_ts$month+
+#                  all_companies_ts$from_name,
+#                FUN=sum)
+# 
+# ggplot(q, aes(x = q$`all_companies_ts$month`, y = q$`all_companies_ts$total_engagement`)) +
+#   geom_line(aes(color=q$`all_companies_ts$from_name`)) +
+#   ylab("Total Engagement") + xlab("Year") +
+#   theme(legend.title=element_blank(), 
+#         legend.text=element_text(size=12), 
+#         legend.position=c(0.18, 0.77), 
+#         legend.background=element_rect(fill=alpha('gray', 0)))
+```
+
+```{r}
+
+```
+
+
+### Engagement by Company
+```{r engagement_by_company, include = TRUE}
+### molson Content Over Time ###
+t <- all_companies_ts %>%
+  filter(., from_name == "Molson Canadian")
+t <- data.frame(table(t$month, t$type))
+
+t$Var1 <- date(t$Var1)
+ggplot(t, aes(x = Var1, y = Freq, group = Var2)) +
+  geom_line(aes(color=Var2)) +
+  ggtitle('Molson Engagement(Facebook)') +
+  xlab("Year") + ylab("Post Frequency") +
+  theme(legend.title=element_blank(), 
+        legend.text=element_text(size=12), 
+        legend.position=c(0.18, 0.77), 
+        legend.background=element_rect(fill=alpha('gray', 0)))
+```
+
+
+
+
+
+```{r}
+#TRISTEN'S GRAPHS!!
+#Labatt Content Over Time
+
+### Labatt Content Over Time ###
+t <- all_companies_ts %>%
+  filter(., from_name == "Labatt USA")
+t <- data.frame(table(t$month, t$type))
+
+t$Var1 <- date(t$Var1)
+ggplot(t, aes(x = Var1, y = Freq, group = Var2)) +
+  geom_line(aes(color=Var2)) +
+  ggtitle('Labatt Facebook Activity(Facebook)') +
+  xlab("Year") + ylab("Post Frequency") +
+  theme(legend.title=element_blank(), 
+        legend.text=element_text(size=12), 
+        legend.position=c(0.18, 0.77), 
+        legend.background=element_rect(fill=alpha('gray', 0)))
+```
+
+```{r}
+#Labatt Content Over Time
+
+#MichelobULTRA Content Over Time ###
+t <- all_companies_ts %>%
+  filter(., from_name == "Michelob ULTRA")
+t <- data.frame(table(t$month, t$type))
+
+t$Var1 <- date(t$Var1)
+ggplot(t, aes(x = Var1, y = Freq, group = Var2)) +
+  geom_line(aes(color=Var2)) +
+  ggtitle('Michelob ULTRA Engagement(Facebook)') +
+  xlab("Year") + ylab("Post Frequency") +
+  theme(legend.title=element_blank(), 
+        legend.text=element_text(size=12), 
+        legend.position=c(0.18, 0.77), 
+        legend.background=element_rect(fill=alpha('gray', 0)))
+```
+
+
+- Is this true?  TODO: Verify that these are the only content types for Molson.
+
+```{r}
+#Labatt Content Over Time
+
+#Bud Light Content Over Time ###
+t <- all_companies_ts %>%
+  filter(., from_name == "Bud Light")
+t <- data.frame(table(t$month, t$type))
+
+t$Var1 <- date(t$Var1)
+ggplot(t, aes(x = Var1, y = Freq, group = Var2)) +
+  geom_line(aes(color=Var2)) +
+  ggtitle('Bud Light Engagement(Facebook)') +
+  xlab("Year") + ylab("Post Frequency") +
+  theme(legend.title=element_blank(), 
+        legend.text=element_text(size=12), 
+        legend.position=c(0.18, 0.77), 
+        legend.background=element_rect(fill=alpha('gray', 0)))
+```
+
+
+
+### Pulling #hastags
+
+I found an example on [Stackoverflow](http://stackoverflow.com/questions/27168226/extracting-hashtags-from-tweets)
+
+<!-- > tweets <- c("New R job: Statistical and Methodological Consultant at the Center for Open Science http://www.r-users.com/jobs/statistical-methodological-consultant-center-open-science/ … #rstats #jobs","New R job: Research Engineer/Applied Researcher at eBay http://www.r-users.com/jobs/research-engineerapplied-researcher-ebay/ … #rstats #jobs") -->
+<!-- > match <- regmatches(tweets,gregexpr("#[[:alnum:]]+",tweets)) -->
+<!-- > match -->
+<!-- [[1]] -->
+<!-- [1] "#rstats" "#jobs"   -->
+
+<!-- [[2]] -->
+<!-- [1] "#rstats" "#jobs"   -->
+<!-- > unlist(match) -->
+<!-- [1] "#rstats" "#jobs"   "#rstats" "#jobs"   -->
+
+
+### Experiment with Hashtag extraction
+```{r hashExtract, eval=FALSE}
+# LabattUSA_timeline %>% 
+#   filter()
+# 
+# 
+# tweets <- LabattUSA_timeline$text
+# match <- regmatches(tweets,gregexpr("#[[:alnum:]]+",tweets))
+# 
+# # Convert the list to a corpus
+# # new_corpus <- as.VCorpus(new_list)  from Stackoverflow (http://stackoverflow.com/questions/34061912/how-transform-a-list-into-a-corpus-in-r)
+# 
+# new_corpus <- as.VCorpus(match)
+# class(new_corpus)
+# inspect(new_corpus)
+# 
+# EnsurePackage <- function(x) {
+#   # EnsurePackage(x) - Installs and loads a package if necessary
+#   # Args:
+#   #   x: name of package
+# 
+#   x <- as.character(x)
+#   if (!require(x, character.only=TRUE)) {
+#     install.packages(pkgs=x, repos="http://cran.r-project.org")
+#     require(x, character.only=TRUE)
+#   }
+# }
+# 
+# MakeWordCloud <- function(corpus) {
+#   # Make a word cloud
+#   #
+#   # Args:
+#   #   textVec: a text vector
+#   #
+#   # Returns:
+#   #   A word cloud created from the text vector
+#   
+#   EnsurePackage("tm")
+#   EnsurePackage("wordcloud")
+#   EnsurePackage("RColorBrewer")
+#   
+#   corpus <- tm_map(corpus, function(x) {
+#     removeWords(x, c("via", "rt", "mt"))
+#   })
+#   
+#   ap.tdm <- TermDocumentMatrix(corpus)
+#   ap.m <- as.matrix(ap.tdm)
+#   ap.v <- sort(rowSums(ap.m), decreasing=TRUE)
+#   ap.d <- data.frame(word = names(ap.v), freq=ap.v)
+#   table(ap.d$freq)
+#   pal2 <- brewer.pal(8, "Dark2")
+#   
+#   wordcloud(ap.d$word, ap.d$freq, 
+#             scale=c(8, .2), min.freq = 3, 
+#             max.words = Inf, random.order = FALSE, 
+#             rot.per = .15, colors = pal2)
+# }
+# 
+# MakeWordCloud(new_corpus)
+```
+
+### Mosaic Plot Experiment
+
+
+- [ ] TODO: Full timeseries of total eng by brand.  (To look for seasonality) - if sports are a driver than seasonality might be important 
+
+```{r}
+# p <- unfiltered_ts %>%
+#   summarise(jd = doy(timestamp)) %>%
+#   group_by(jd) %>%
+#   ggplot(aes(factor(jd),total_engagement)) +
+#   geom_boxplot() + 
+#   facet_grid(~ from_name)
+# plot(p)
+```
+
+- [ ] Populate a table of top performing posts and low performing posts - Tristen can pull shot of tweets for discussion
+- [ ] Create a data.frame with these columns brand, data, tweet, engagement (I think this is a subset of all_companies)
+
+
+- [ ] summary table of brand, month, totEng, see examples:http://leonawicz.github.io/HtmlWidgetExamples/ex_dt_sparkline.html
+
+
+```{r}
+all_companies_ts %>%
+  select(from_name, timestamp, total_engagement) %>%
+  group_by(from_name, month(timestamp), year(timestamp)) %>%
+  summarise(count = n(), 
+            engagement = sum(total_engagement)) %>%
+  ggplot(., aes(y = log(engagement), x = log(count), colour = from_name)) +
+  geom_point() +
+  xlab('Post Activity') + ylab('Engagement') +
+  geom_smooth(se = FALSE, method = "lm") +
+  #geom_smooth(se = FALSE)
+  ggtitle("Engagement vs Post Acitivity(Facebook)")
+```
+
+
+
+
+
+```{r}
+all_companies_ts %>%
+  #filter(from_name != "Bud Light" ) %>%
+  #filter(from_name != "Michelob ULTRA") %>%
+  select(from_name, timestamp, total_engagement) %>%
+  group_by(from_name, month(timestamp), year(timestamp)) %>%
+  summarise(count = n(),
+            engagement = sum(total_engagement)) %>%
+  ggplot(., aes(y = log(engagement), x = log(count), colour = from_name)) +
+  geom_point() +
+  geom_smooth(se = FALSE, method = "lm") +
+  ggtitle("Engagement vs Post Acitivity(Facebook)") +
+  ylab("Total Engagement") + xlab("Total Monthly Posts")
+```
+
+- There is a positive relationship between post activity (ie counts) and total engagement.  
+
+```{r}
+all_companies_ts %>%
+  filter(from_name == "Labatt USA" ) %>%
+  select(from_name, timestamp, type, total_engagement) %>%
+  group_by(from_name, month(timestamp), year(timestamp), type) %>%
+  summarise(count = n(),
+            engagement = sum(total_engagement)) %>%
+  ggplot(., aes(y = log(engagement), x = log(count), colour = type)) +
+  geom_point() +
+  geom_smooth(se = FALSE, method = "lm") +
+  ggtitle("Post Efficacy by type for Labatt USA(Facebook)") +
+  ylab("Total Engagement") + xlab("Total Monthly Posts")
+
+
+```
+
+- [X] TOD vs engagement similar to post activity vs Engagement
+
+```{r}
+all_companies_ts %>%
+  filter(from_name == "Labatt USA" ) %>%
+  select(from_name, tod, total_engagement) %>%
+  ggplot(., aes(y = total_engagement, x = factor(tod), colour = from_name)) +
+  geom_boxplot() +
+  ylim(c(0,2000)) +
+  ggtitle("Post Efficacy by type for Labatt USA(Facebook)") +
+  ylab("Total Engagement") + xlab("Time of Day")
+
+
+```
+
+
+### Kevins Questions 
+```{r kevins_questions, include = TRUE}
+# load('processed_data/bud_fb.RData')
+# bud$total_engagement <- rowSums(bud[,9:11])
+# z <- bud %>%
+#   arrange(desc(total_engagement))
+# head(z)
+# Updated upstream
+```
+
+
+## Twitter
+```{r twitter sentiment, include = TRUE}
+text_clean <- function(cleanliness) {
+  cleanliness <- str_replace_all(cleanliness, "@\\w+", "")
+  cleanliness <- gsub("&amp", "", cleanliness)
+  cleanliness <- gsub("(RT|via)((?:\\b\\W*@\\w+)+)", "", cleanliness)
+  cleanliness <- gsub("@\\w+", "", cleanliness)
+  cleanliness <- gsub("[[:punct:]]", "", cleanliness)
+  cleanliness <- gsub("[[:digit:]]", "", cleanliness)
+  cleanliness <- gsub("http\\w+", "", cleanliness)
+  cleanliness <- gsub("[ \t]{2,}", "", cleanliness)
+  cleanliness <- gsub("^\\s+|\\s+$", "", cleanliness)
+  return(cleanliness)
+}
+
+LabattUSA_timeline$sentiment <- lapply(text_clean(LabattUSA_timeline$text), get_nrc_sentiment)
+labatt_sentiment <- data.frame('created' = LabattUSA_timeline$created,
+                               'text' = LabattUSA_timeline$text,
+                               'sentiment' = as.character(LabattUSA_timeline$sentiment))
+labatt_sentiment$score <- get_sentiment(as.character(text_clean(labatt_sentiment$text))) %>% as.numeric()
+
+labatt_sentiment %>%
+  ggplot(aes(as_date(created), score)) +
+  geom_point() +
+  geom_smooth() +
+  scale_color_manual(values = colourList) +
+  scale_x_date(name = '\nDates', breaks = date_breaks("3 months"), labels = date_format("%Y-%b")) +
+  scale_y_continuous(name = "Sentiment Score\n", breaks = seq(-5, 5, by = 1)) + theme_bw() +
+  ggtitle('Labatt USA Sentiment(Twitter)')
+
+
+Molson_Canadian_timeline$sentiment <- lapply(text_clean(Molson_Canadian_timeline$text), get_nrc_sentiment)
+molson_sentiment <- data.frame('created' = Molson_Canadian_timeline$created,
+                               'text' = Molson_Canadian_timeline$text,
+                               'sentiment' = as.character(Molson_Canadian_timeline$sentiment))
+molson_sentiment$score <- get_sentiment(as.character(text_clean(molson_sentiment$text))) %>% as.numeric()
+
+molson_sentiment %>%
+  ggplot(aes(as_date(created), score)) +
+  geom_point() +
+  geom_smooth() +
+  scale_color_manual(values = colourList) +
+  scale_x_date(name = '\nDates', breaks = date_breaks("3 months"), labels = date_format("%Y-%b")) +
+  scale_y_continuous(name = "Sentiment Score\n", breaks = seq(-5, 5, by = 1)) + theme_bw() +
+  ggtitle('Molson Canadian Sentiment(Twitter)')
+
+budlight_timeline$sentiment <- lapply(text_clean(budlight_timeline$text), get_nrc_sentiment)
+budlight_sentiment <- data.frame('created' = budlight_timeline$created,
+                               'text' = budlight_timeline$text,
+                               'sentiment' = as.character(budlight_timeline$sentiment))
+budlight_sentiment$score <- get_sentiment(as.character(text_clean(budlight_sentiment$text))) %>% as.numeric()
+
+budlight_sentiment %>%
+  ggplot(aes(as_date(created), score)) +
+  geom_point() +
+  geom_smooth() +
+  scale_color_manual(values = colourList) +
+  scale_x_date(name = '\nDates', breaks = date_breaks("3 months"), labels = date_format("%Y-%b")) +
+  scale_y_continuous(name = "Sentiment Score\n", breaks = seq(-5, 5, by = 1)) + theme_bw() +
+  ggtitle('Bud Light Sentiment(Twitter)')
+
+MichelobULTRA_timeline$sentiment <- lapply(text_clean(MichelobULTRA_timeline$text), get_nrc_sentiment)
+michelob_sentiment <- data.frame('created' = MichelobULTRA_timeline$created,
+                               'text' = MichelobULTRA_timeline$text,
+                               'sentiment' = as.character(MichelobULTRA_timeline$sentiment))
+michelob_sentiment$score <- get_sentiment(as.character(text_clean(michelob_sentiment$text))) %>% as.numeric()
+
+michelob_sentiment %>%
+  ggplot(aes(as_date(created), score)) +
+  geom_point() +
+  geom_smooth() +
+  scale_color_manual(values = colourList) +
+  scale_x_date(name = '\nDates', breaks = date_breaks("3 months"), labels = date_format("%Y-%b")) +
+  scale_y_continuous(name = "Sentiment Score\n", breaks = seq(-5, 5, by = 1)) + theme_bw() +
+  ggtitle('Michelob ULTRA Sentiment(Twitter)\n')
+
+```
+
